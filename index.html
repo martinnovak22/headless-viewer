@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'"
+    />
+    <title>Headless Viewer</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        background: #0a0a0a;
+        color: #d8d8d8;
+        font: 15px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+        user-select: none;
+      }
+
+      /* Neviditelný pruh nahoře, za který lze okno přetáhnout. */
+      #drag {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 28px;
+        z-index: 30;
+        -webkit-app-region: drag;
+      }
+      body.fullscreen #drag {
+        display: none;
+      }
+
+      /* Načtená stránka přes celé okno. */
+      #view {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        background: #000;
+        visibility: hidden;
+      }
+      body.loaded #view {
+        visibility: visible;
+      }
+
+      /* Řádek pro URL: úvodní obrazovka i plovoucí překryv nad stránkou. */
+      #bar {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        background: #0a0a0a;
+      }
+      body.loaded #bar {
+        background: rgba(0, 0, 0, 0.55);
+      }
+      #bar.hidden {
+        display: none;
+      }
+
+      #form {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: min(720px, 86vw);
+        padding: 6px 6px 6px 18px;
+        background: #141414;
+        border: 1px solid #262626;
+        border-radius: 12px;
+        transition: border-color 0.15s;
+      }
+      #form:focus-within {
+        border-color: #4a4a4a;
+      }
+
+      #url {
+        flex: 1;
+        min-width: 0;
+        height: 40px;
+        padding: 0;
+        background: transparent;
+        border: 0;
+        outline: 0;
+        color: #f2f2f2;
+        font: inherit;
+        font-size: 16px;
+        user-select: text;
+      }
+      #url::placeholder {
+        color: #5a5a5a;
+      }
+
+      #paste {
+        flex: none;
+        height: 32px;
+        padding: 0 12px;
+        background: transparent;
+        border: 0;
+        border-radius: 8px;
+        color: #6e6e6e;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+        transition: color 0.15s, background 0.15s;
+      }
+      #paste:hover,
+      #paste:focus-visible {
+        color: #e0e0e0;
+        background: #222;
+        outline: 0;
+      }
+
+      /* Nenápadná tlačítka pod řádkem: celá obrazovka a zavření okna. */
+      #actions {
+        display: flex;
+        gap: 6px;
+      }
+      #actions button {
+        height: 30px;
+        padding: 0 12px;
+        background: transparent;
+        border: 0;
+        border-radius: 8px;
+        color: #6e6e6e;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+        transition: color 0.15s, background 0.15s;
+      }
+      #actions button:hover,
+      #actions button:focus-visible {
+        color: #e0e0e0;
+        background: #222;
+        outline: 0;
+      }
+      #actions #close:hover,
+      #actions #close:focus-visible {
+        color: #fff;
+        background: #8a2a22;
+      }
+
+      #msg {
+        min-height: 20px;
+        max-width: 86vw;
+        color: #c9705f;
+        font-size: 13px;
+        text-align: center;
+      }
+
+      #toast {
+        position: fixed;
+        left: 50%;
+        bottom: 36px;
+        z-index: 25;
+        transform: translateX(-50%);
+        padding: 8px 16px;
+        background: rgba(20, 20, 20, 0.85);
+        border-radius: 999px;
+        color: #eee;
+        font-size: 13px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+      }
+      #toast.show {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="drag"></div>
+
+    <webview id="view" partition="persist:viewer"></webview>
+
+    <div id="bar">
+      <form id="form">
+        <input
+          id="url"
+          type="text"
+          placeholder="Zadejte URL a stiskněte Enter"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          autofocus
+        />
+        <button id="paste" type="button">Vložit a otevřít</button>
+      </form>
+      <div id="actions">
+        <button id="fullscreen" type="button">Celá obrazovka</button>
+        <button id="close" type="button">Zavřít okno</button>
+      </div>
+      <div id="msg" role="alert"></div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>
