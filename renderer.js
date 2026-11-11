@@ -83,6 +83,10 @@ document.getElementById('fullscreen').addEventListener('click', () => {
   window.viewer.action('fullscreen');
 });
 
+document.getElementById('new-window').addEventListener('click', () => {
+  window.viewer.action('new-window');
+});
+
 document.getElementById('close').addEventListener('click', () => {
   window.viewer.action('close');
 });

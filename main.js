@@ -7,12 +7,23 @@ const isMac = process.platform === 'darwin';
 // Media should start playing right after load, without a click.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
-let win = null; // main window (index.html)
-let guest = null; // webContents of the <webview> element holding the loaded page
-let guestHtmlFullscreen = false; // the page itself put a <video> into fullscreen
-let fit = 'contain'; // 'contain' = Fit, 'cover' = Fill
-let mediaMode = true; // false = browse mode: the page is left untouched (signing in etc.)
-let cssKey = null; // key of the CSS inserted into the current document
+// One entry per open viewer window. Each window keeps its own state:
+//   win                 the BrowserWindow (index.html)
+//   guest               webContents of the <webview> holding the loaded page
+//   guestHtmlFullscreen the page itself put a <video> into fullscreen
+//   fit                 'contain' = Fit, 'cover' = Fill
+//   mediaMode           false = browse mode: the page is left untouched (signing in etc.)
+//   cssKey              key of the CSS inserted into the current document
+//   urlBarVisible       whether the URL bar is showing
+const viewers = new Set();
+
+// Finds the viewer a webContents belongs to, as either its UI or its loaded page.
+function viewerOf(contents) {
+  for (const v of viewers) {
+    if (v.win.webContents === contents || v.guest === contents) return v;
+  }
+  return null;
+}
 
 // Sites often refuse sign-in from an "unknown" browser, so present as regular Chrome.
 app.userAgentFallback = app.userAgentFallback
@@ -102,80 +113,89 @@ function injectedScript(fitMode) {
   })();`;
 }
 
-async function applyCss(contents) {
+async function applyCss(v, contents) {
   if (contents.isDestroyed()) return;
   try {
     const key = await contents.insertCSS(INJECTED_CSS);
     // The user may have switched to browse mode in the meantime.
-    if (mediaMode) cssKey = key;
+    if (v.mediaMode && v.guest === contents) v.cssKey = key;
     else contents.removeInsertedCSS(key).catch(() => {});
   } catch {
     // The document is gone by now (new navigation).
   }
 }
 
-function injectInto(contents, newDocument) {
+function injectInto(v, contents, newDocument) {
   if (contents.isDestroyed()) return;
   if (newDocument) {
-    cssKey = null; // the previous document's CSS went away with it
-    if (mediaMode) applyCss(contents);
+    v.cssKey = null; // the previous document's CSS went away with it
+    if (v.mediaMode) applyCss(v, contents);
   }
-  contents.executeJavaScript(injectedScript(fit)).catch(() => {});
+  contents.executeJavaScript(injectedScript(v.fit)).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
 // Actions
 // ---------------------------------------------------------------------------
 
-function sendCommand(name, data) {
-  if (win && !win.isDestroyed()) win.webContents.send('viewer:command', name, data);
+function hasGuest(v) {
+  return v.guest && !v.guest.isDestroyed();
 }
 
-function toggleFullscreen() {
-  if (win) win.setFullScreen(!win.isFullScreen());
+function sendCommand(v, name, data) {
+  if (!v.win.isDestroyed()) v.win.webContents.send('viewer:command', name, data);
 }
 
-function reload() {
-  if (guest && !guest.isDestroyed()) guest.reload();
+function toggleFullscreen(v) {
+  v.win.setFullScreen(!v.win.isFullScreen());
 }
 
-function goBack() {
-  if (guest && !guest.isDestroyed() && guest.navigationHistory.canGoBack()) {
-    guest.navigationHistory.goBack();
+function reload(v) {
+  if (hasGuest(v)) v.guest.reload();
+}
+
+function goBack(v) {
+  if (hasGuest(v) && v.guest.navigationHistory.canGoBack()) v.guest.navigationHistory.goBack();
+}
+
+function goForward(v) {
+  if (hasGuest(v) && v.guest.navigationHistory.canGoForward()) {
+    v.guest.navigationHistory.goForward();
   }
 }
 
-function goForward() {
-  if (guest && !guest.isDestroyed() && guest.navigationHistory.canGoForward()) {
-    guest.navigationHistory.goForward();
-  }
-}
-
-function toggleFit() {
-  fit = fit === 'contain' ? 'cover' : 'contain';
-  if (guest && !guest.isDestroyed()) {
-    guest
+function toggleFit(v) {
+  v.fit = v.fit === 'contain' ? 'cover' : 'contain';
+  if (hasGuest(v)) {
+    v.guest
       .executeJavaScript(
-        `document.documentElement.setAttribute('data-hv-fit', ${JSON.stringify(fit)})`
+        `document.documentElement.setAttribute('data-hv-fit', ${JSON.stringify(v.fit)})`
       )
       .catch(() => {});
   }
-  sendCommand('toast', fit === 'cover' ? 'Fill' : 'Fit');
+  sendCommand(v, 'toast', v.fit === 'cover' ? 'Fill' : 'Fit');
 }
 
 // Browse mode turns the page tweaks off so the page can be used normally
 // (signing in, searching, scrolling). Media mode turns them back on.
-function toggleMediaMode() {
-  mediaMode = !mediaMode;
-  if (guest && !guest.isDestroyed()) {
-    if (mediaMode) {
-      applyCss(guest);
-    } else if (cssKey) {
-      guest.removeInsertedCSS(cssKey).catch(() => {});
-      cssKey = null;
+function toggleMediaMode(v) {
+  v.mediaMode = !v.mediaMode;
+  if (hasGuest(v)) {
+    if (v.mediaMode) {
+      applyCss(v, v.guest);
+    } else if (v.cssKey) {
+      v.guest.removeInsertedCSS(v.cssKey).catch(() => {});
+      v.cssKey = null;
     }
   }
-  sendCommand('toast', mediaMode ? 'Media mode' : 'Browse mode');
+  sendCommand(v, 'toast', v.mediaMode ? 'Media mode' : 'Browse mode');
+}
+
+// Opens another viewer window, slightly offset from the one it was opened from.
+function openNewWindow(v) {
+  const [x, y] = v.win.getPosition();
+  const [width, height] = v.win.isFullScreen() ? [1280, 720] : v.win.getSize();
+  createWindow({ x: x + 32, y: y + 32, width, height });
 }
 
 const ACTIONS = {
@@ -183,7 +203,8 @@ const ACTIONS = {
   reload,
   fit: toggleFit,
   browse: toggleMediaMode,
-  close: () => win && win.close(),
+  'new-window': openNewWindow,
+  close: (v) => v.win.close(),
 };
 
 // Shortcuts with modifiers and function keys. They are caught in the main
@@ -191,20 +212,23 @@ const ACTIONS = {
 // has focus. Bare letters (F, R, C, B) are handled by the renderer and
 // webview-preload, because they need to know whether the user is typing in a
 // text field.
-function handleInput(event, input) {
+function handleInput(v, contents, event, input) {
   if (input.type !== 'keyDown') return;
   const key = input.key.toLowerCase();
   const mod = input.control || input.meta; // Ctrl (Windows/Linux) or Cmd (macOS)
+  // Alt+arrow inside the URL bar should move the caret, not the history.
+  const editingUrl = v.urlBarVisible && contents === v.win.webContents;
 
   let handler = null;
-  if (mod && !input.alt && key === 'l') handler = () => sendCommand('toggle-bar');
-  else if (key === 'escape' && !guestHtmlFullscreen) handler = () => sendCommand('toggle-bar');
-  else if (key === 'f11') handler = toggleFullscreen;
-  else if (mod && !input.alt && key === 'r') handler = reload;
-  else if (mod && !input.alt && key === 'b') handler = toggleMediaMode;
+  if (mod && !input.alt && key === 'l') handler = () => sendCommand(v, 'toggle-bar');
+  else if (key === 'escape' && !v.guestHtmlFullscreen) handler = () => sendCommand(v, 'toggle-bar');
+  else if (key === 'f11') handler = () => toggleFullscreen(v);
+  else if (mod && !input.alt && key === 'r') handler = () => reload(v);
+  else if (mod && !input.alt && key === 'b') handler = () => toggleMediaMode(v);
+  else if (mod && !input.alt && key === 'n') handler = () => openNewWindow(v);
   else if (mod && !input.alt && key === 'q') handler = () => app.quit();
-  else if (input.alt && key === 'arrowleft' && !isEditingUrl(event)) handler = goBack;
-  else if (input.alt && key === 'arrowright' && !isEditingUrl(event)) handler = goForward;
+  else if (input.alt && key === 'arrowleft' && !editingUrl) handler = () => goBack(v);
+  else if (input.alt && key === 'arrowright' && !editingUrl) handler = () => goForward(v);
 
   if (handler) {
     event.preventDefault();
@@ -212,26 +236,20 @@ function handleInput(event, input) {
   }
 }
 
-// Alt+arrow inside the URL bar should move the caret, not the history.
-let urlBarVisible = true;
-function isEditingUrl(event) {
-  return urlBarVisible && win && event.sender === win.webContents;
-}
-
 // ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
 
-function setupGuest(contents) {
-  guest = contents;
-  guestHtmlFullscreen = false;
-  cssKey = null;
+function setupGuest(v, contents) {
+  v.guest = contents;
+  v.guestHtmlFullscreen = false;
+  v.cssKey = null;
 
-  contents.on('dom-ready', () => injectInto(contents, true));
-  contents.on('did-finish-load', () => injectInto(contents, false));
-  contents.on('before-input-event', handleInput);
-  contents.on('enter-html-full-screen', () => (guestHtmlFullscreen = true));
-  contents.on('leave-html-full-screen', () => (guestHtmlFullscreen = false));
+  contents.on('dom-ready', () => injectInto(v, contents, true));
+  contents.on('did-finish-load', () => injectInto(v, contents, false));
+  contents.on('before-input-event', (event, input) => handleInput(v, contents, event, input));
+  contents.on('enter-html-full-screen', () => (v.guestHtmlFullscreen = true));
+  contents.on('leave-html-full-screen', () => (v.guestHtmlFullscreen = false));
 
   // No new windows – target=_blank links open in place.
   contents.setWindowOpenHandler(({ url }) => {
@@ -240,14 +258,15 @@ function setupGuest(contents) {
   });
 
   contents.on('destroyed', () => {
-    if (guest === contents) guest = null;
+    if (v.guest === contents) v.guest = null;
   });
 }
 
-function createWindow() {
-  win = new BrowserWindow({
+function createWindow(bounds = {}) {
+  const win = new BrowserWindow({
     width: 1280,
     height: 720,
+    ...bounds,
     minWidth: 320,
     minHeight: 200,
     frame: false,
@@ -262,16 +281,24 @@ function createWindow() {
     },
   });
 
+  const v = {
+    win,
+    guest: null,
+    guestHtmlFullscreen: false,
+    fit: 'contain',
+    mediaMode: true,
+    cssKey: null,
+    urlBarVisible: true,
+  };
+  viewers.add(v);
+
   win.once('ready-to-show', () => win.show());
-  win.on('closed', () => {
-    win = null;
-    guest = null;
-  });
-  win.on('enter-full-screen', () => sendCommand('fullscreen', true));
-  win.on('leave-full-screen', () => sendCommand('fullscreen', false));
+  win.on('closed', () => viewers.delete(v));
+  win.on('enter-full-screen', () => sendCommand(v, 'fullscreen', true));
+  win.on('leave-full-screen', () => sendCommand(v, 'fullscreen', false));
 
   const host = win.webContents;
-  host.on('before-input-event', handleInput);
+  host.on('before-input-event', (event, input) => handleInput(v, host, event, input));
 
   // The UI window must never navigate away or open other windows.
   host.on('will-navigate', (event) => event.preventDefault());
@@ -283,10 +310,11 @@ function createWindow() {
     webPreferences.nodeIntegration = false;
     webPreferences.contextIsolation = true;
     webPreferences.sandbox = true;
-    // Persistent storage: cookies and logins survive an app restart.
+    // Persistent storage: cookies and logins survive an app restart
+    // and are shared by all viewer windows.
     webPreferences.partition = 'persist:viewer';
   });
-  host.on('did-attach-webview', (_event, contents) => setupGuest(contents));
+  host.on('did-attach-webview', (_event, contents) => setupGuest(v, contents));
 
   win.loadFile(path.join(__dirname, 'index.html'));
 }
@@ -295,23 +323,29 @@ function createWindow() {
 // IPC
 // ---------------------------------------------------------------------------
 
-function isKnownSender(event) {
-  return (win && event.sender === win.webContents) || (guest && event.sender === guest);
+// Only the UI window of a viewer, not the page loaded in it.
+function hostViewerOf(event) {
+  const v = viewerOf(event.sender);
+  return v && v.win.webContents === event.sender ? v : null;
 }
 
+// Actions a loaded page may trigger; the rest are reserved for the UI window.
+const GUEST_ACTIONS = new Set(['fullscreen', 'reload', 'fit', 'browse']);
+
 ipcMain.on('viewer:action', (event, name) => {
-  if (!isKnownSender(event)) return;
-  const action = Object.hasOwn(ACTIONS, name) ? ACTIONS[name] : null;
-  if (action) action();
+  const v = viewerOf(event.sender);
+  if (!v || !Object.hasOwn(ACTIONS, name)) return;
+  if (event.sender === v.guest && !GUEST_ACTIONS.has(name)) return;
+  ACTIONS[name](v);
 });
 
 ipcMain.on('viewer:bar-visible', (event, visible) => {
-  if (win && event.sender === win.webContents) urlBarVisible = Boolean(visible);
+  const v = hostViewerOf(event);
+  if (v) v.urlBarVisible = Boolean(visible);
 });
 
 ipcMain.handle('viewer:read-clipboard', (event) => {
-  if (!win || event.sender !== win.webContents) return '';
-  return clipboard.readText();
+  return hostViewerOf(event) ? clipboard.readText() : '';
 });
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('viewer', {
   // Clipboard text for Paste & Go.
   readClipboard: () => ipcRenderer.invoke('viewer:read-clipboard'),
-  // Actions: 'fullscreen' | 'reload' | 'fit' | 'browse' | 'close'.
+  // Actions: 'fullscreen' | 'reload' | 'fit' | 'browse' | 'new-window' | 'close'.
   action: (name) => ipcRenderer.send('viewer:action', name),
   // The main process needs to know whether the URL bar is visible.
   setBarVisible: (visible) => ipcRenderer.send('viewer:bar-visible', visible),

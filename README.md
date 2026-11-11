@@ -33,19 +33,21 @@ After launch, type a URL and press `Enter` (a missing `https://` is added for yo
 
 | Shortcut | Action |
 | --- | --- |
-| `Esc` or `Ctrl+L` | show/hide the menu with the URL field and the fullscreen and close-window buttons |
+| `Esc` or `Ctrl+L` | show/hide the menu with the URL field and the fullscreen, new-window and close-window buttons |
 | `F`, `F11` or double-click | fullscreen |
 | `C` | fit / fill (`object-fit: contain` / `cover`) |
 | `B` or `Ctrl+B` | browse mode / media mode |
 | `R` or `Ctrl+R` | reload |
+| `Ctrl+N` | open another viewer window |
 | `Alt+←` / `Alt+→` | back / forward in history |
-| `Ctrl+Q` or `Alt+F4` | quit |
+| `Ctrl+Q` | quit the app (all windows) |
+| `Alt+F4` | close the current window |
 
 On macOS, `Cmd` works in place of `Ctrl`. Single-letter shortcuts do not fire while you are typing in a text field on the page.
 
 ## Signing in to websites
 
-Cookies and logins are stored persistently, so you stay signed in after restarting the app.
+Cookies and logins are stored persistently, so you stay signed in after restarting the app. All viewer windows share the same login.
 
 In media mode the app modifies the page (hides scrollbars, stretches the main video or image), which breaks login forms and normal browsing. So:
 
