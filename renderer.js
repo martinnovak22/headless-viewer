@@ -111,7 +111,7 @@ view.addEventListener('did-fail-load', (event) => {
 
 // --- Shortcuts and double-click while the UI window has focus --------------
 
-const KEY_ACTIONS = { f: 'fullscreen', r: 'reload', c: 'fit', b: 'browse' };
+const KEY_ACTIONS = { f: 'fullscreen', r: 'reload', c: 'fit', b: 'browse', a: 'adblock' };
 
 document.addEventListener('keydown', (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;

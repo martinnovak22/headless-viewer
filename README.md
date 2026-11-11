@@ -37,13 +37,35 @@ After launch, type a URL and press `Enter` (a missing `https://` is added for yo
 | `F`, `F11` or double-click | fullscreen |
 | `C` | fit / fill (`object-fit: contain` / `cover`) |
 | `B` or `Ctrl+B` | browse mode / media mode |
+| `A` | ad blocking on / off (reloads the page) |
+| `Space` or `K` | play / pause |
+| `←` / `→` | seek 5 s back / forward |
+| `↑` / `↓` | volume up / down |
+| `M` | mute / unmute |
 | `R` or `Ctrl+R` | reload |
 | `Ctrl+N` | open another viewer window |
 | `Alt+←` / `Alt+→` | back / forward in history |
 | `Ctrl+Q` | quit the app (all windows) |
 | `Alt+F4` | close the current window |
 
-On macOS, `Cmd` works in place of `Ctrl`. Single-letter shortcuts do not fire while you are typing in a text field on the page.
+On macOS, `Cmd` works in place of `Ctrl`. Single-letter shortcuts do not fire while you are typing in a text field on the page. The playback keys are taken over only in media mode and only when the viewer has found a video; otherwise the page keeps its own keyboard behaviour.
+
+## Pages with their own player
+
+You do not need a direct link to the video file. Many sites stream through `blob:` addresses, which only work inside the page that created them, so paste the address of the page itself. In media mode the viewer then:
+
+1. Looks for a visible `<video>` on the page and stretches the largest one.
+2. If the page has none, looks inside embedded frames (players hosted on another domain) and stretches the frame together with its video.
+3. If there is still no video, stretches the image when the page has exactly one.
+4. Otherwise leaves the page as it is.
+
+The stretched video covers the site's own player buttons, so the viewer turns on the browser's native video controls and adds the playback shortcuts above. Both are undone in browse mode.
+
+## Ad blocking
+
+Ads and pre-roll ad requests are blocked with [`@ghostery/adblocker-electron`](https://github.com/ghostery/adblocker) (EasyList-based filters). The filter engine is downloaded on first start and cached, so later starts work offline. If it cannot be loaded, the viewer runs without blocking.
+
+Press `A` to turn blocking off for sites that refuse to play with a blocker; the choice is remembered. Ads stitched into the video stream itself (YouTube, Twitch) are not reliably removed.
 
 ## Signing in to websites
 
@@ -69,5 +91,7 @@ Signing in with Google may not work; Google often blocks it in embedded browsers
 ## Known limitations
 
 - The top 28 px of the window are used for dragging and do not pass clicks through to the page (disabled in fullscreen). Double-clicking this strip maximizes the window.
-- On a regular page, the largest `<video>` is stretched, or the only `<img>` if there is exactly one. If the page has several images, open a direct link to the file.
+- If a page has several images and no video, nothing is stretched; open a direct link to the file.
+- A page whose only video is an advertisement gets that advertisement stretched. Ad blocking usually prevents this.
+- DRM-protected services (Netflix and similar) do not play in a stock Electron build.
 - When loading some videos, Electron prints a `GUEST_VIEW_MANAGER_CALL … ERR_FAILED` message to the terminal. It does not affect playback.
