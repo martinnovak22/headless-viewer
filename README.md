@@ -1,10 +1,10 @@
 # Headless Viewer
 
-Lehký bezrámečkový prohlížeč médií z webu postavený na Electronu. Otevře URL v čistém okně bez jakéhokoliv rozhraní prohlížeče a obrázek nebo video roztáhne na celé okno. Funguje na Windows, macOS i Linuxu.
+A lightweight, frameless media viewer for the web, built on Electron. It opens a URL in a clean window with no browser UI at all and stretches the image or video to fill the window. Works on Windows, macOS and Linux.
 
-## Jak to rozjet z repozitáře
+## Running from the repository
 
-Potřebujete [Node.js](https://nodejs.org/) 20 nebo novější (LTS instalátor stačí, `npm` je jeho součástí) a [Git](https://git-scm.com/).
+You need [Node.js](https://nodejs.org/) 20 or newer (the LTS installer is enough, `npm` comes with it) and [Git](https://git-scm.com/).
 
 ```bash
 git clone https://github.com/martinnovak22/headless-viewer.git
@@ -13,59 +13,59 @@ npm install
 npm start
 ```
 
-Postup je stejný na všech systémech. Na Windows příkazy spusťte v PowerShellu nebo v příkazovém řádku. `npm install` při prvním spuštění stáhne Electron (zhruba 100–250 MB), takže chvíli trvá.
+The steps are the same on every system. On Windows, run the commands in PowerShell or Command Prompt. The first `npm install` downloads Electron (roughly 100–250 MB), so it takes a while.
 
-## Sestavení samostatné aplikace
+## Building a standalone app
 
-Sestavujte na systému, pro který aplikaci chcete – build pro Windows na Windows, build pro macOS na Macu.
+Build on the system you are targeting: the Windows build on Windows, the macOS build on a Mac.
 
-| Příkaz | Výsledek ve složce `dist/` |
+| Command | Output in `dist/` |
 | --- | --- |
-| `npm run dist:win` | přenosný `.exe` (bez instalace) a instalátor `-setup.exe` |
-| `npm run dist:mac` | `.dmg` a `.zip` |
-| `npm run dist` | build pro systém, na kterém příkaz spouštíte |
+| `npm run dist:win` | portable `.exe` (no installation) and a `-setup.exe` installer |
+| `npm run dist:mac` | `.dmg` and `.zip` |
+| `npm run dist` | build for the system you run the command on |
 
-Aplikace není digitálně podepsaná, takže Windows (SmartScreen) i macOS (Gatekeeper) při prvním spuštění zobrazí varování, které je potřeba potvrdit.
+The app is not code-signed, so Windows (SmartScreen) and macOS (Gatekeeper) show a warning on first launch that you have to confirm.
 
-## Ovládání
+## Controls
 
-Po spuštění zadejte URL a stiskněte `Enter` (chybějící `https://` se doplní), nebo použijte tlačítko **Vložit a otevřít**. Okno přesunete tažením za neviditelný pruh u horního okraje.
+After launch, type a URL and press `Enter` (a missing `https://` is added for you), or use the **Paste & Go** button (labelled "Vložit a otevřít"; the UI is in Czech). Move the window by dragging the invisible strip along its top edge.
 
-| Zkratka | Akce |
+| Shortcut | Action |
 | --- | --- |
-| `Esc` nebo `Ctrl+L` | zobrazí/skryje menu s řádkem pro URL, tlačítky Celá obrazovka a Zavřít okno |
-| `F`, `F11` nebo dvojklik | celá obrazovka |
-| `C` | přizpůsobit / vyplnit (`object-fit: contain` / `cover`) |
-| `B` nebo `Ctrl+B` | režim prohlížení / režim médií |
-| `R` nebo `Ctrl+R` | obnovit |
-| `Alt+←` / `Alt+→` | zpět / vpřed v historii |
-| `Ctrl+Q` nebo `Alt+F4` | ukončit |
+| `Esc` or `Ctrl+L` | show/hide the menu with the URL field and the fullscreen and close-window buttons |
+| `F`, `F11` or double-click | fullscreen |
+| `C` | fit / fill (`object-fit: contain` / `cover`) |
+| `B` or `Ctrl+B` | browse mode / media mode |
+| `R` or `Ctrl+R` | reload |
+| `Alt+←` / `Alt+→` | back / forward in history |
+| `Ctrl+Q` or `Alt+F4` | quit |
 
-Na macOS funguje místo `Ctrl` i `Cmd`. Jednopísmenné zkratky se nespouští, když píšete do textového pole na stránce.
+On macOS, `Cmd` works in place of `Ctrl`. Single-letter shortcuts do not fire while you are typing in a text field on the page.
 
-## Přihlášení na webech
+## Signing in to websites
 
-Cookies a přihlášení se ukládají trvale, takže po restartu zůstanete přihlášeni.
+Cookies and logins are stored persistently, so you stay signed in after restarting the app.
 
-V režimu médií aplikace stránku upravuje (skryje posuvníky, roztáhne hlavní video nebo obrázek), což přihlašovací formuláře a běžné procházení rozbíjí. Proto:
+In media mode the app modifies the page (hides scrollbars, stretches the main video or image), which breaks login forms and normal browsing. So:
 
-1. Stiskněte `B` – stránka se zobrazí normálně.
-2. Přihlaste se a najděte obrázek nebo video.
-3. Stiskněte `B` znovu – médium se roztáhne na celé okno.
+1. Press `B` – the page is shown as it normally would be.
+2. Sign in and find the image or video.
+3. Press `B` again – the media is stretched to fill the window.
 
-Přihlášení přes Google nemusí fungovat, Google ho ve vestavěných prohlížečích často blokuje.
+Signing in with Google may not work; Google often blocks it in embedded browsers.
 
-## Struktura projektu
+## Project structure
 
-| Soubor | K čemu je |
+| File | Purpose |
 | --- | --- |
-| `main.js` | hlavní proces: okno, zkratky, CSS a JS vkládané do stránek |
-| `index.html`, `renderer.js` | úvodní obrazovka a menu s řádkem pro URL |
-| `preload.js` | most mezi oknem s UI a hlavním procesem |
-| `webview-preload.js` | jednopísmenné zkratky a dvojklik uvnitř načtené stránky |
+| `main.js` | main process: window, shortcuts, CSS and JS injected into pages |
+| `index.html`, `renderer.js` | home screen and the menu with the URL field |
+| `preload.js` | bridge between the UI window and the main process |
+| `webview-preload.js` | single-letter shortcuts and double-click inside the loaded page |
 
-## Známá omezení
+## Known limitations
 
-- Horních 28 px okna slouží k přesunu okna a nepropouští kliknutí do stránky (v režimu celé obrazovky se vypíná). Dvojklik na tento pruh okno maximalizuje.
-- Na běžné stránce se roztáhne největší `<video>`, případně jediný `<img>`. Pokud je obrázků víc, otevřete přímý odkaz na soubor.
-- Při načítání některých videí vypíše Electron do terminálu hlášku `GUEST_VIEW_MANAGER_CALL … ERR_FAILED`. Na přehrávání nemá vliv.
+- The top 28 px of the window are used for dragging and do not pass clicks through to the page (disabled in fullscreen). Double-clicking this strip maximizes the window.
+- On a regular page, the largest `<video>` is stretched, or the only `<img>` if there is exactly one. If the page has several images, open a direct link to the file.
+- When loading some videos, Electron prints a `GUEST_VIEW_MANAGER_CALL … ERR_FAILED` message to the terminal. It does not affect playback.

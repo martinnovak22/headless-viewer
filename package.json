@@ -1,7 +1,7 @@
 {
   "name": "headless-viewer",
   "version": "1.0.0",
-  "description": "Lehký bezrámečkový prohlížeč médií z webu",
+  "description": "Lightweight frameless media viewer for the web",
   "main": "main.js",
   "author": "",
   "license": "MIT",
