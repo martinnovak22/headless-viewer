@@ -1,5 +1,14 @@
 // Main process: frameless window, keyboard shortcuts and tweaks to loaded pages.
-const { app, BrowserWindow, Menu, clipboard, ipcMain, session, webFrameMain } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  Menu,
+  clipboard,
+  globalShortcut,
+  ipcMain,
+  session,
+  webFrameMain,
+} = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -427,6 +436,70 @@ async function runMediaCommand(v, name) {
   if (text) sendCommand(v, 'toast', text);
 }
 
+// ---- Stash: hide everything at once and bring it back --------------------
+//
+// One shortcut pauses whatever is playing and minimizes every viewer window;
+// pressing it again restores the windows and resumes exactly what was playing.
+// Restoring any single window by hand (Dock, taskbar) brings back the rest too.
+const STASH_SHORTCUT = 'CommandOrControl+Shift+H';
+let stashed = false;
+
+// These run inside the page's frames (serialized with toString()).
+function pausePlayingMedia() {
+  for (const media of document.querySelectorAll('video, audio')) {
+    if (!media.paused) {
+      media.pause();
+      media.setAttribute('data-hv-resume', '');
+    }
+  }
+}
+
+function resumePausedMedia() {
+  for (const media of document.querySelectorAll('[data-hv-resume]')) {
+    media.removeAttribute('data-hv-resume');
+    media.play().catch(() => {});
+  }
+}
+
+function stashAll() {
+  stashed = true;
+  for (const v of viewers) {
+    runInFrames(v, `(${pausePlayingMedia.toString()})()`);
+    if (v.win.isMinimized()) continue;
+    if (isMac && v.win.isFullScreen()) {
+      // macOS cannot minimize a fullscreen window: leave fullscreen first and
+      // remember to return to it.
+      v.restoreFullscreen = true;
+      v.win.once('leave-full-screen', () => {
+        if (stashed && !v.win.isDestroyed()) v.win.minimize();
+      });
+      v.win.setFullScreen(false);
+    } else {
+      v.win.minimize();
+    }
+  }
+}
+
+function unstashAll() {
+  stashed = false;
+  for (const v of viewers) {
+    if (v.win.isMinimized()) v.win.restore();
+    else v.win.show();
+    if (v.restoreFullscreen) {
+      v.restoreFullscreen = false;
+      v.win.setFullScreen(true);
+    }
+    runInFrames(v, `(${resumePausedMedia.toString()})()`, true);
+  }
+}
+
+function toggleStash() {
+  if (viewers.size === 0) return;
+  const anyVisible = [...viewers].some((v) => !v.win.isMinimized());
+  if (anyVisible && !stashed) stashAll();
+  else unstashAll();
+}
+
 // Opens another viewer window, slightly offset from the one it was opened from.
 function openNewWindow(v) {
   const [x, y] = v.win.getPosition();
@@ -457,13 +530,16 @@ function handleInput(v, contents, event, input) {
   const editingUrl = v.urlBarVisible && contents === v.win.webContents;
 
   let handler = null;
-  if (mod && !input.alt && key === 'l') handler = () => sendCommand(v, 'toggle-bar');
+  if (mod && !input.alt && !input.shift && key === 'l') handler = () => sendCommand(v, 'toggle-bar');
   else if (key === 'escape' && !v.guestHtmlFullscreen) handler = () => sendCommand(v, 'toggle-bar');
   else if (key === 'f11') handler = () => toggleFullscreen(v);
   else if (mod && !input.alt && key === 'r') handler = () => reload(v);
   else if (mod && !input.alt && key === 'b') handler = () => toggleMediaMode(v);
   else if (mod && !input.alt && key === 'n') handler = () => openNewWindow(v);
   else if (mod && !input.alt && key === 'q') handler = () => app.quit();
+  // Normally the global shortcut gets this first; this is the fallback for
+  // when another program already owns the combination.
+  else if (mod && input.shift && !input.alt && key === 'h') handler = toggleStash;
   else if (input.alt && key === 'arrowleft' && !editingUrl) handler = () => goBack(v);
   else if (input.alt && key === 'arrowright' && !editingUrl) handler = () => goForward(v);
 
@@ -527,12 +603,17 @@ function createWindow(bounds = {}) {
     guestHtmlFullscreen: false,
     fit: 'contain',
     mediaMode: true,
+    restoreFullscreen: false,
     urlBarVisible: true,
   };
   viewers.add(v);
 
   win.once('ready-to-show', () => win.show());
   win.on('closed', () => viewers.delete(v));
+  // Bringing one stashed window back by hand brings back all of them.
+  win.on('restore', () => {
+    if (stashed) unstashAll();
+  });
   win.on('enter-full-screen', () => sendCommand(v, 'fullscreen', true));
   win.on('leave-full-screen', () => sendCommand(v, 'fullscreen', false));
 
@@ -611,6 +692,10 @@ app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
   }
 
+  if (!globalShortcut.register(STASH_SHORTCUT, toggleStash)) {
+    console.warn(`Could not register ${STASH_SHORTCUT}; it only works while the viewer has focus.`);
+  }
+
   loadSettings();
   initAdblock(); // in the background; windows do not wait for it
   createWindow();
@@ -619,5 +704,7 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+app.on('will-quit', () => globalShortcut.unregisterAll());
 
 app.on('window-all-closed', () => app.quit());

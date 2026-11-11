@@ -44,11 +44,12 @@ After launch, type a URL and press `Enter` (a missing `https://` is added for yo
 | `M` | mute / unmute |
 | `R` or `Ctrl+R` | reload |
 | `Ctrl+N` | open another viewer window |
+| `Ctrl+Shift+H` | pause everything and minimize all windows; press again to restore and resume |
 | `Alt+←` / `Alt+→` | back / forward in history |
 | `Ctrl+Q` | quit the app (all windows) |
 | `Alt+F4` | close the current window |
 
-On macOS, `Cmd` works in place of `Ctrl`. Single-letter shortcuts do not fire while you are typing in a text field on the page. The playback keys are taken over only in media mode and only when the viewer has found a video; otherwise the page keeps its own keyboard behaviour.
+On macOS, `Cmd` works in place of `Ctrl`. `Ctrl+Shift+H` is a global shortcut: it works even when the viewer is in the background, and while the viewer is running it takes that combination away from other apps. Restoring any one window from the Dock or taskbar brings back all of them and resumes playback. Single-letter shortcuts do not fire while you are typing in a text field on the page. The playback keys are taken over only in media mode and only when the viewer has found a video; otherwise the page keeps its own keyboard behaviour.
 
 ## Pages with their own player
 
