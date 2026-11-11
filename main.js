@@ -1,25 +1,25 @@
-// Hlavní proces: bezrámečkové okno, klávesové zkratky a úprava načtených stránek.
+// Main process: frameless window, keyboard shortcuts and tweaks to loaded pages.
 const { app, BrowserWindow, Menu, clipboard, ipcMain } = require('electron');
 const path = require('node:path');
 
 const isMac = process.platform === 'darwin';
 
-// Média se mají přehrát hned po načtení, bez kliknutí.
+// Media should start playing right after load, without a click.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
-let win = null; // hlavní okno (index.html)
-let guest = null; // webContents elementu <webview> s načtenou stránkou
-let guestHtmlFullscreen = false; // stránka sama přepnula <video> do fullscreenu
-let fit = 'contain'; // 'contain' = Přizpůsobit, 'cover' = Vyplnit
-let mediaMode = true; // false = režim prohlížení: stránka se neupravuje (přihlášení apod.)
-let cssKey = null; // klíč vloženého CSS v aktuálním dokumentu
+let win = null; // main window (index.html)
+let guest = null; // webContents of the <webview> element holding the loaded page
+let guestHtmlFullscreen = false; // the page itself put a <video> into fullscreen
+let fit = 'contain'; // 'contain' = Fit, 'cover' = Fill
+let mediaMode = true; // false = browse mode: the page is left untouched (signing in etc.)
+let cssKey = null; // key of the CSS inserted into the current document
 
-// Weby často odmítají přihlášení z „neznámého“ prohlížeče – tváříme se jako běžný Chrome.
+// Sites often refuse sign-in from an "unknown" browser, so present as regular Chrome.
 app.userAgentFallback = app.userAgentFallback
   .replace(/\s(Electron|headless-viewer|HeadlessViewer)\/\S+/gi, '');
 
 // ---------------------------------------------------------------------------
-// CSS a JS vkládané do každé načtené stránky
+// CSS and JS injected into every loaded page
 // ---------------------------------------------------------------------------
 
 const INJECTED_CSS = `
@@ -55,8 +55,8 @@ const INJECTED_CSS = `
   }
 `;
 
-// Najde hlavní médium stránky a označí ho atributem data-hv-main.
-// Skript je idempotentní – lze ho volat opakovaně (dom-ready i did-finish-load).
+// Finds the page's main media element and marks it with data-hv-main.
+// The script is idempotent, so it can run repeatedly (dom-ready and did-finish-load).
 function injectedScript(fitMode) {
   return `(() => {
     const root = document.documentElement;
@@ -75,10 +75,10 @@ function injectedScript(fitMode) {
 
       let target = null;
       if (/^(image|video|audio)\\//.test(document.contentType || '')) {
-        // Přímý odkaz na soubor – Chromium ho zabalí do jednoduchého dokumentu.
+        // Direct link to a file – Chromium wraps it in a simple document.
         target = document.querySelector('video, img');
       } else {
-        // Běžná stránka: největší <video>, případně jediný <img> na stránce.
+        // Regular page: the largest <video>, or the only <img> on the page.
         const videos = [...document.querySelectorAll('video')];
         if (videos.length) {
           target = videos.reduce((a, b) => (area(b) > area(a) ? b : a));
@@ -93,7 +93,7 @@ function injectedScript(fitMode) {
     window.__hvPick = pick;
     pick();
 
-    // Přehrávače často vkládají <video> až dodatečně.
+    // Players often insert their <video> later.
     let timer = null;
     new MutationObserver(() => {
       clearTimeout(timer);
@@ -106,25 +106,25 @@ async function applyCss(contents) {
   if (contents.isDestroyed()) return;
   try {
     const key = await contents.insertCSS(INJECTED_CSS);
-    // Mezitím mohl uživatel přepnout do režimu prohlížení.
+    // The user may have switched to browse mode in the meantime.
     if (mediaMode) cssKey = key;
     else contents.removeInsertedCSS(key).catch(() => {});
   } catch {
-    // Dokument mezitím zanikl (nová navigace).
+    // The document is gone by now (new navigation).
   }
 }
 
 function injectInto(contents, newDocument) {
   if (contents.isDestroyed()) return;
   if (newDocument) {
-    cssKey = null; // CSS z předchozího dokumentu zaniklo s ním
+    cssKey = null; // the previous document's CSS went away with it
     if (mediaMode) applyCss(contents);
   }
   contents.executeJavaScript(injectedScript(fit)).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
-// Akce
+// Actions
 // ---------------------------------------------------------------------------
 
 function sendCommand(name, data) {
@@ -160,11 +160,11 @@ function toggleFit() {
       )
       .catch(() => {});
   }
-  sendCommand('toast', fit === 'cover' ? 'Vyplnit' : 'Přizpůsobit');
+  sendCommand('toast', fit === 'cover' ? 'Fill' : 'Fit');
 }
 
-// Režim prohlížení vypne úpravy stránky, aby šla normálně používat
-// (přihlášení, hledání, posouvání). Režim médií je zase zapne.
+// Browse mode turns the page tweaks off so the page can be used normally
+// (signing in, searching, scrolling). Media mode turns them back on.
 function toggleMediaMode() {
   mediaMode = !mediaMode;
   if (guest && !guest.isDestroyed()) {
@@ -175,7 +175,7 @@ function toggleMediaMode() {
       cssKey = null;
     }
   }
-  sendCommand('toast', mediaMode ? 'Režim médií' : 'Režim prohlížení');
+  sendCommand('toast', mediaMode ? 'Media mode' : 'Browse mode');
 }
 
 const ACTIONS = {
@@ -186,14 +186,15 @@ const ACTIONS = {
   close: () => win && win.close(),
 };
 
-// Zkratky s modifikátory a funkční klávesy. Zachytávají se v hlavním procesu,
-// aby fungovaly stejně, ať má fokus úvodní obrazovka, nebo načtená stránka.
-// Samotná písmena (F, R, C) řeší renderer a webview-preload, protože musí
-// vědět, jestli uživatel zrovna nepíše do textového pole.
+// Shortcuts with modifiers and function keys. They are caught in the main
+// process so they behave the same whether the home screen or the loaded page
+// has focus. Bare letters (F, R, C, B) are handled by the renderer and
+// webview-preload, because they need to know whether the user is typing in a
+// text field.
 function handleInput(event, input) {
   if (input.type !== 'keyDown') return;
   const key = input.key.toLowerCase();
-  const mod = input.control || input.meta; // Ctrl (Windows/Linux) i Cmd (macOS)
+  const mod = input.control || input.meta; // Ctrl (Windows/Linux) or Cmd (macOS)
 
   let handler = null;
   if (mod && !input.alt && key === 'l') handler = () => sendCommand('toggle-bar');
@@ -211,14 +212,14 @@ function handleInput(event, input) {
   }
 }
 
-// Alt/Cmd+šipka v řádku pro URL má hýbat kurzorem, ne historií.
+// Alt+arrow inside the URL bar should move the caret, not the history.
 let urlBarVisible = true;
 function isEditingUrl(event) {
   return urlBarVisible && win && event.sender === win.webContents;
 }
 
 // ---------------------------------------------------------------------------
-// Okno
+// Window
 // ---------------------------------------------------------------------------
 
 function setupGuest(contents) {
@@ -232,7 +233,7 @@ function setupGuest(contents) {
   contents.on('enter-html-full-screen', () => (guestHtmlFullscreen = true));
   contents.on('leave-html-full-screen', () => (guestHtmlFullscreen = false));
 
-  // Žádná nová okna – odkazy s target=_blank se otevřou na místě.
+  // No new windows – target=_blank links open in place.
   contents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/i.test(url)) contents.loadURL(url).catch(() => {});
     return { action: 'deny' };
@@ -272,17 +273,17 @@ function createWindow() {
   const host = win.webContents;
   host.on('before-input-event', handleInput);
 
-  // Okno s UI se nikdy nesmí přesměrovat jinam ani otevírat další okna.
+  // The UI window must never navigate away or open other windows.
   host.on('will-navigate', (event) => event.preventDefault());
   host.setWindowOpenHandler(() => ({ action: 'deny' }));
 
-  // Načtená stránka běží izolovaně, jen s naším malým preloadem.
+  // The loaded page runs isolated, with only our small preload.
   host.on('will-attach-webview', (_event, webPreferences) => {
     webPreferences.preload = path.join(__dirname, 'webview-preload.js');
     webPreferences.nodeIntegration = false;
     webPreferences.contextIsolation = true;
     webPreferences.sandbox = true;
-    // Trvalé úložiště: cookies a přihlášení přežijí restart aplikace.
+    // Persistent storage: cookies and logins survive an app restart.
     webPreferences.partition = 'persist:viewer';
   });
   host.on('did-attach-webview', (_event, contents) => setupGuest(contents));
@@ -319,7 +320,7 @@ ipcMain.handle('viewer:read-clipboard', (event) => {
 
 app.whenReady().then(() => {
   if (isMac) {
-    // macOS potřebuje nabídku kvůli Cmd+C/V/X/A v textovém poli a Cmd+Q.
+    // macOS needs a menu for Cmd+C/V/X/A in the text field and for Cmd+Q.
     Menu.setApplicationMenu(
       Menu.buildFromTemplate([
         { role: 'appMenu' },

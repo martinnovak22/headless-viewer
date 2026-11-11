@@ -1,4 +1,4 @@
-// Renderer okna s UI: řádek pro URL a ovládání elementu <webview>.
+// Renderer for the UI window: the URL bar and control of the <webview> element.
 const view = document.getElementById('view');
 const bar = document.getElementById('bar');
 const form = document.getElementById('form');
@@ -7,9 +7,9 @@ const pasteButton = document.getElementById('paste');
 const msg = document.getElementById('msg');
 const toast = document.getElementById('toast');
 
-let loaded = false; // už se načetla (nebo načítá) nějaká stránka
+let loaded = false; // a page has been loaded (or is loading)
 
-// Doplní protokol, pokud ho uživatel nezadal.
+// Adds the protocol when the user left it out.
 function normalizeUrl(raw) {
   const text = String(raw || '').trim();
   if (!text) return '';
@@ -25,7 +25,7 @@ function showBar() {
     try {
       input.value = view.getURL() || input.value;
     } catch {
-      // <webview> ještě není připravený – ponecháme poslední zadanou hodnotu.
+      // <webview> is not ready yet – keep the last value the user entered.
     }
   }
   input.focus();
@@ -40,7 +40,7 @@ function hideBar() {
 
 function toggleBar() {
   if (bar.classList.contains('hidden')) showBar();
-  else if (loaded) hideBar(); // na úvodní obrazovce není co odkrýt
+  else if (loaded) hideBar(); // on the home screen there is nothing to reveal
 }
 
 function openUrl(raw) {
@@ -62,7 +62,7 @@ function showToast(text) {
   toastTimer = setTimeout(() => toast.classList.remove('show'), 1200);
 }
 
-// --- Řádek pro URL ---------------------------------------------------------
+// --- URL bar ---------------------------------------------------------------
 
 form.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -74,7 +74,7 @@ pasteButton.addEventListener('click', async () => {
   if (text && text.trim()) {
     openUrl(text);
   } else {
-    msg.textContent = 'Schránka neobsahuje žádný text.';
+    msg.textContent = 'The clipboard contains no text.';
     input.focus();
   }
 });
@@ -87,8 +87,8 @@ document.getElementById('close').addEventListener('click', () => {
   window.viewer.action('close');
 });
 
-// Klik mimo řádek plovoucí překryv zavře. Čeká se chvilku, jestli nepřijde
-// druhý klik – dvojklik má přepnout celou obrazovku, ne zavřít překryv.
+// A click outside the bar closes the floating overlay. It waits a moment for a
+// second click – a double-click should toggle fullscreen, not close the overlay.
 let backdropTimer = null;
 bar.addEventListener('click', (event) => {
   if (event.target !== bar || !loaded) return;
@@ -96,16 +96,16 @@ bar.addEventListener('click', (event) => {
   if (event.detail === 1) backdropTimer = setTimeout(hideBar, 280);
 });
 
-// --- Načtená stránka -------------------------------------------------------
+// --- Loaded page -----------------------------------------------------------
 
 view.addEventListener('did-fail-load', (event) => {
-  // -3 = ERR_ABORTED (např. přesměrování nebo nová navigace), to není chyba.
+  // -3 = ERR_ABORTED (e.g. a redirect or a new navigation), which is not an error.
   if (!event.isMainFrame || event.errorCode === -3) return;
   showBar();
-  msg.textContent = `Stránku se nepodařilo načíst: ${event.errorDescription || event.errorCode}`;
+  msg.textContent = `Failed to load the page: ${event.errorDescription || event.errorCode}`;
 });
 
-// --- Zkratky a dvojklik, když má fokus okno s UI ---------------------------
+// --- Shortcuts and double-click while the UI window has focus --------------
 
 const KEY_ACTIONS = { f: 'fullscreen', r: 'reload', c: 'fit', b: 'browse' };
 
@@ -125,7 +125,7 @@ document.addEventListener('dblclick', (event) => {
   window.viewer.action('fullscreen');
 });
 
-// --- Příkazy z hlavního procesu --------------------------------------------
+// --- Commands from the main process ----------------------------------------
 
 window.viewer.onCommand((name, data) => {
   if (name === 'toggle-bar') toggleBar();

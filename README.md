@@ -29,7 +29,7 @@ The app is not code-signed, so Windows (SmartScreen) and macOS (Gatekeeper) show
 
 ## Controls
 
-After launch, type a URL and press `Enter` (a missing `https://` is added for you), or use the **Paste & Go** button (labelled "Vložit a otevřít"; the UI is in Czech). Move the window by dragging the invisible strip along its top edge.
+After launch, type a URL and press `Enter` (a missing `https://` is added for you), or use the **Paste & Go** button. Move the window by dragging the invisible strip along its top edge.
 
 | Shortcut | Action |
 | --- | --- |

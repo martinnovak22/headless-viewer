@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="cs">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta
@@ -24,7 +24,7 @@
         user-select: none;
       }
 
-      /* Neviditelný pruh nahoře, za který lze okno přetáhnout. */
+      /* Invisible strip along the top used to drag the window. */
       #drag {
         position: fixed;
         top: 0;
@@ -38,7 +38,7 @@
         display: none;
       }
 
-      /* Načtená stránka přes celé okno. */
+      /* The loaded page fills the whole window. */
       #view {
         position: fixed;
         inset: 0;
@@ -51,7 +51,7 @@
         visibility: visible;
       }
 
-      /* Řádek pro URL: úvodní obrazovka i plovoucí překryv nad stránkou. */
+      /* URL bar: the home screen and the floating overlay above the page. */
       #bar {
         position: fixed;
         inset: 0;
@@ -122,7 +122,7 @@
         outline: 0;
       }
 
-      /* Nenápadná tlačítka pod řádkem: celá obrazovka a zavření okna. */
+      /* Unobtrusive buttons below the bar: fullscreen and close window. */
       #actions {
         display: flex;
         gap: 6px;
@@ -189,17 +189,17 @@
         <input
           id="url"
           type="text"
-          placeholder="Zadejte URL a stiskněte Enter"
+          placeholder="Enter a URL and press Enter"
           autocomplete="off"
           autocapitalize="off"
           spellcheck="false"
           autofocus
         />
-        <button id="paste" type="button">Vložit a otevřít</button>
+        <button id="paste" type="button">Paste &amp; Go</button>
       </form>
       <div id="actions">
-        <button id="fullscreen" type="button">Celá obrazovka</button>
-        <button id="close" type="button">Zavřít okno</button>
+        <button id="fullscreen" type="button">Fullscreen</button>
+        <button id="close" type="button">Close window</button>
       </div>
       <div id="msg" role="alert"></div>
     </div>

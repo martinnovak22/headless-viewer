@@ -1,5 +1,5 @@
-// Preload načtené stránky (<webview>): jednopísmenné zkratky a dvojklik.
-// Běží izolovaně od skriptů stránky; stránce nezpřístupňuje žádné API.
+// Preload for the loaded page (<webview>): single-letter shortcuts and double-click.
+// Runs isolated from the page's scripts and exposes no API to the page.
 const { ipcRenderer } = require('electron');
 
 function isEditable(target) {
@@ -28,7 +28,7 @@ window.addEventListener(
   'dblclick',
   (event) => {
     if (isEditable(event.target)) return;
-    // Zabrání tomu, aby si <video> zároveň samo přepnulo vlastní fullscreen.
+    // Stops <video> from also toggling its own element fullscreen.
     event.preventDefault();
     event.stopImmediatePropagation();
     ipcRenderer.send('viewer:action', 'fullscreen');
