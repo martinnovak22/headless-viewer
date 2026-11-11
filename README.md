@@ -7,7 +7,7 @@ Lehký bezrámečkový prohlížeč médií z webu postavený na Electronu. Otev
 Potřebujete [Node.js](https://nodejs.org/) 20 nebo novější (LTS instalátor stačí, `npm` je jeho součástí) a [Git](https://git-scm.com/).
 
 ```bash
-git clone <adresa-repozitáře>
+git clone https://github.com/martinnovak22/headless-viewer.git
 cd headless-viewer
 npm install
 npm start
