@@ -44,12 +44,22 @@ After launch, type a URL and press `Enter` (a missing `https://` is added for yo
 | `M` | mute / unmute |
 | `R` or `Ctrl+R` | reload |
 | `Ctrl+N` | open another viewer window |
+| `Ctrl+Alt+1` … `Ctrl+Alt+9` | arrange all windows into layout 1–9 (see [Layouts](#layouts)) |
+| `Ctrl+Alt+L` | lock / unlock the layout |
 | `Ctrl+Shift+H` | pause everything and minimize all windows; press again to restore and resume |
 | `Alt+←` / `Alt+→` | back / forward in history |
 | `Ctrl+Q` | quit the app (all windows) |
 | `Alt+F4` | close the current window |
 
 On macOS, `Cmd` works in place of `Ctrl`. `Ctrl+Shift+H` is a global shortcut: it works even when the viewer is in the background, and while the viewer is running it takes that combination away from other apps. Restoring any one window from the Dock or taskbar brings back all of them and resumes playback. Single-letter shortcuts do not fire while you are typing in a text field on the page. The playback keys are taken over only in media mode and only when the viewer has found a video; otherwise the page keeps its own keyboard behaviour.
+
+## Layouts
+
+**Layouts** in the menu (`Esc`) shows the window layouts. Clicking one, or pressing `Ctrl+Alt+` and its number, arranges all viewer windows into its zones on the display of the current window. The current window takes zone 1 (highlighted); the others keep their zones from the previous layout, so applying a layout again does not shuffle them. Empty zones get new windows, and windows beyond the number of zones stay where they are.
+
+The default layouts are *Center + corners* (one large window in the middle, two small ones on each side), halves, thirds, a 2×2 grid and one main window with two on the side. **New layout** opens a grid editor: set the columns and rows, drag across cells to add a zone, click a zone to remove it. Existing layouts can be edited (✎) or deleted (×), and **Restore defaults** brings back the original set. Windows in a layout touch edge to edge, with no gaps. Layouts are saved in `settings.json`, up to nine.
+
+**Lock layout** (`Ctrl+Alt+L`) stops every window from being moved or resized by hand. Fullscreen, minimizing, stashing and applying another layout keep working.
 
 ## Pages with their own player
 

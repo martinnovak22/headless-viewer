@@ -6,6 +6,7 @@ const {
   clipboard,
   globalShortcut,
   ipcMain,
+  screen,
   session,
   webFrameMain,
 } = require('electron');
@@ -329,7 +330,7 @@ function syncFrames(v) {
 // CDN down), the viewer simply runs without blocking.
 const PARTITION = 'persist:viewer';
 let blocker = null; // ElectronBlocker once the filter lists are loaded
-let settings = { adblock: true };
+let settings = { adblock: true, layouts: null };
 
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 
@@ -507,6 +508,145 @@ function openNewWindow(v) {
   createWindow({ x: x + 32, y: y + 32, width, height });
 }
 
+
+// ---- Layouts: arrange all windows into the zones of a preset --------------
+//
+// A layout divides the work area of one display into a grid of cols x rows
+// cells. Each zone is [col, row, width, height] in cells. Zone 0 gets the
+// window the layout was applied from; the rest fill in the remaining zones.
+// Empty zones get new windows, extra windows are left where they are.
+const DEFAULT_LAYOUTS = [
+  {
+    name: 'Center + corners',
+    cols: 4,
+    rows: 2,
+    zones: [[1, 0, 2, 2], [0, 0, 1, 1], [3, 0, 1, 1], [0, 1, 1, 1], [3, 1, 1, 1]],
+  },
+  { name: 'Halves', cols: 2, rows: 1, zones: [[0, 0, 1, 1], [1, 0, 1, 1]] },
+  { name: 'Thirds', cols: 3, rows: 1, zones: [[0, 0, 1, 1], [1, 0, 1, 1], [2, 0, 1, 1]] },
+  { name: 'Grid', cols: 2, rows: 2, zones: [[0, 0, 1, 1], [1, 0, 1, 1], [0, 1, 1, 1], [1, 1, 1, 1]] },
+  { name: 'Main + side', cols: 3, rows: 2, zones: [[0, 0, 2, 2], [2, 0, 1, 1], [2, 1, 1, 1]] },
+];
+const MAX_GRID = 8;
+const MAX_ZONES = 12;
+const MAX_LAYOUTS = 9; // one per shortcut, Ctrl+Alt+1 to 9
+
+function layouts() {
+  return Array.isArray(settings.layouts) ? settings.layouts : DEFAULT_LAYOUTS;
+}
+
+// Layouts arrive from the UI window, so check them before they are stored.
+function validLayout(layout) {
+  if (!layout || typeof layout !== 'object') return null;
+  const { cols, rows, zones } = layout;
+  const inRange = (n, min, max) => Number.isInteger(n) && n >= min && n <= max;
+  if (!inRange(cols, 1, MAX_GRID) || !inRange(rows, 1, MAX_GRID)) return null;
+  if (!Array.isArray(zones) || zones.length < 1 || zones.length > MAX_ZONES) return null;
+  const used = new Set();
+  for (const zone of zones) {
+    if (!Array.isArray(zone) || zone.length !== 4) return null;
+    const [x, y, w, h] = zone;
+    if (!inRange(x, 0, cols - 1) || !inRange(y, 0, rows - 1)) return null;
+    if (!inRange(w, 1, cols - x) || !inRange(h, 1, rows - y)) return null;
+    for (let c = x; c < x + w; c++) {
+      for (let r = y; r < y + h; r++) {
+        if (used.has(`${c},${r}`)) return null; // zones must not overlap
+        used.add(`${c},${r}`);
+      }
+    }
+  }
+  const name = String(layout.name || '').trim().slice(0, 40) || `${cols} × ${rows}`;
+  return { name, cols, rows, zones: zones.map((zone) => [...zone]) };
+}
+
+function layoutState() {
+  return {
+    layouts: layouts(),
+    isDefault: !Array.isArray(settings.layouts),
+    max: MAX_LAYOUTS,
+    maxGrid: MAX_GRID,
+    maxZones: MAX_ZONES,
+  };
+}
+
+// Pixel rectangles of the zones inside a display's work area. Neighbouring
+// zones share their edge exactly, with no gap and no overlap.
+function zoneRects(layout, area) {
+  const colX = (c) => area.x + Math.round((area.width * c) / layout.cols);
+  const rowY = (r) => area.y + Math.round((area.height * r) / layout.rows);
+  return layout.zones.map(([c, r, w, h]) => ({
+    x: colX(c),
+    y: rowY(r),
+    width: colX(c + w) - colX(c),
+    height: rowY(r + h) - rowY(r),
+  }));
+}
+
+// Locking only stops the user from moving and resizing; fullscreen,
+// minimizing and stashing keep working.
+function setLocked(v, locked) {
+  v.locked = locked;
+  v.win.setMovable(!locked);
+  v.win.setResizable(!locked);
+  v.win.setFullScreenable(true);
+  sendCommand(v, 'locked', locked);
+}
+
+function placeWindow(v, rect) {
+  const win = v.win;
+  v.restoreFullscreen = false;
+  const apply = () => {
+    if (win.isDestroyed()) return;
+    // Programmatic moves are allowed on a locked window, but some platforms
+    // refuse to resize one, so unlock just for the move.
+    const locked = v.locked;
+    if (locked) setLocked(v, false);
+    win.setBounds(rect);
+    if (locked) setLocked(v, true);
+  };
+  if (win.isFullScreen()) {
+    // Leaving fullscreen animates and then restores the old frame; move after that.
+    win.once('leave-full-screen', () => setTimeout(apply, isMac ? 50 : 0));
+    win.setFullScreen(false);
+    return;
+  }
+  if (win.isMinimized()) win.restore();
+  if (win.isMaximized()) win.unmaximize();
+  apply();
+}
+
+function applyLayout(origin, index) {
+  const layout = layouts()[index];
+  if (!layout) return;
+  if (stashed) unstashAll();
+  const area = screen.getDisplayMatching(origin.win.getBounds()).workArea;
+  const rects = zoneRects(layout, area);
+
+  // The window the layout was applied from goes first. The others keep the
+  // order of their zones from the previous layout, so applying a layout again
+  // does not shuffle them; windows without a zone follow in opening order.
+  const rest = [...viewers].filter((v) => v !== origin);
+  rest.sort((a, b) => (a.zone ?? Infinity) - (b.zone ?? Infinity));
+  const ordered = [origin, ...rest];
+
+  ordered.forEach((v, i) => {
+    v.zone = i < rects.length ? i : null;
+    if (i < rects.length) placeWindow(v, rects[i]);
+  });
+  for (let i = ordered.length; i < rects.length; i++) {
+    const v = createWindow(rects[i]);
+    v.zone = i;
+    if (origin.locked) setLocked(v, true);
+  }
+  sendCommand(origin, 'toast', layout.name);
+}
+
+function toggleLock(origin) {
+  const lock = ![...viewers].some((v) => v.locked);
+  for (const v of viewers) setLocked(v, lock);
+  sendCommand(origin, 'toast', lock ? 'Layout locked' : 'Layout unlocked');
+}
+
 const ACTIONS = {
   fullscreen: toggleFullscreen,
   reload,
@@ -514,6 +654,7 @@ const ACTIONS = {
   browse: toggleMediaMode,
   adblock: toggleAdblock,
   'new-window': openNewWindow,
+  lock: toggleLock,
   close: (v) => v.win.close(),
 };
 
@@ -529,8 +670,16 @@ function handleInput(v, contents, event, input) {
   // Alt+arrow inside the URL bar should move the caret, not the history.
   const editingUrl = v.urlBarVisible && contents === v.win.webContents;
 
+  // Ctrl+Alt+1 to 9 and Ctrl+Alt+L. Matched by physical key, because Alt
+  // (Option on macOS) changes the typed character. On Windows Ctrl+Alt is
+  // also AltGr, so leave it to the URL field while the user types there.
+  const layoutKey = mod && input.alt && !input.shift && (isMac || !editingUrl);
+  const layoutDigit = /^Digit[1-9]$/.test(input.code) ? Number(input.code.slice(5)) : 0;
+
   let handler = null;
-  if (mod && !input.alt && !input.shift && key === 'l') handler = () => sendCommand(v, 'toggle-bar');
+  if (layoutKey && layoutDigit) handler = () => applyLayout(v, layoutDigit - 1);
+  else if (layoutKey && input.code === 'KeyL') handler = () => toggleLock(v);
+  else if (mod && !input.alt && !input.shift && key === 'l') handler = () => sendCommand(v, 'toggle-bar');
   else if (key === 'escape' && !v.guestHtmlFullscreen) handler = () => sendCommand(v, 'toggle-bar');
   else if (key === 'f11') handler = () => toggleFullscreen(v);
   else if (mod && !input.alt && key === 'r') handler = () => reload(v);
@@ -605,6 +754,8 @@ function createWindow(bounds = {}) {
     mediaMode: true,
     restoreFullscreen: false,
     urlBarVisible: true,
+    zone: null, // index of the zone in the last applied layout
+    locked: false, // cannot be moved or resized by the user
   };
   viewers.add(v);
 
@@ -618,6 +769,10 @@ function createWindow(bounds = {}) {
   win.on('leave-full-screen', () => sendCommand(v, 'fullscreen', false));
 
   const host = win.webContents;
+  // A window locked before its UI finished loading missed the command.
+  host.on('did-finish-load', () => {
+    if (v.locked) sendCommand(v, 'locked', true);
+  });
   host.on('before-input-event', (event, input) => handleInput(v, host, event, input));
 
   // The UI window must never navigate away or open other windows.
@@ -639,6 +794,7 @@ function createWindow(bounds = {}) {
   host.on('did-attach-webview', (_event, contents) => setupGuest(v, contents));
 
   win.loadFile(path.join(__dirname, 'index.html'));
+  return v;
 }
 
 // ---------------------------------------------------------------------------
@@ -669,6 +825,28 @@ ipcMain.on('viewer:media', (event, name) => {
 ipcMain.on('viewer:bar-visible', (event, visible) => {
   const v = hostViewerOf(event);
   if (v) v.urlBarVisible = Boolean(visible);
+});
+
+ipcMain.handle('viewer:layouts', (event) => (hostViewerOf(event) ? layoutState() : null));
+
+ipcMain.on('viewer:layout-apply', (event, index) => {
+  const v = hostViewerOf(event);
+  if (v && Number.isInteger(index)) applyLayout(v, index);
+});
+
+// Replaces the whole list (add, delete, reorder); null restores the defaults.
+ipcMain.handle('viewer:layouts-save', (event, list) => {
+  if (!hostViewerOf(event)) return null;
+  if (list === null) {
+    settings.layouts = null;
+  } else {
+    if (!Array.isArray(list) || list.length > MAX_LAYOUTS) return layoutState();
+    const checked = list.map(validLayout);
+    if (checked.some((layout) => !layout)) return layoutState();
+    settings.layouts = checked;
+  }
+  saveSettings();
+  return layoutState();
 });
 
 ipcMain.handle('viewer:read-clipboard', (event) => {

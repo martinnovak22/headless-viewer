@@ -177,6 +177,206 @@
       #toast.show {
         opacity: 1;
       }
+      body.locked #drag {
+        display: none;
+      }
+
+      /* Layouts panel: presets and the grid editor. */
+      #layouts {
+        width: min(720px, 92vw);
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 14px;
+        background: #141414;
+        border: 1px solid #262626;
+        border-radius: 12px;
+        font-size: 13px;
+      }
+      #layouts[hidden],
+      #layout-browser[hidden],
+      #editor[hidden] {
+        display: none;
+      }
+      #layout-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 10px;
+      }
+      .card {
+        position: relative;
+        padding: 8px;
+        background: transparent;
+        border: 1px solid #262626;
+        border-radius: 10px;
+        color: #9a9a9a;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      .card:hover,
+      .card:focus-visible {
+        border-color: #4a4a4a;
+        color: #e0e0e0;
+        outline: 0;
+      }
+      .card .label {
+        display: block;
+        margin-top: 6px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .card .key {
+        color: #5a5a5a;
+        margin-right: 4px;
+      }
+      .card .tools {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        display: none;
+        gap: 2px;
+      }
+      .card:hover .tools,
+      .card:focus-within .tools {
+        display: flex;
+      }
+      .tools span {
+        width: 22px;
+        height: 22px;
+        line-height: 22px;
+        text-align: center;
+        background: #222;
+        border-radius: 6px;
+        color: #bbb;
+      }
+      .tools span:hover {
+        color: #fff;
+        background: #333;
+      }
+      .tools .delete:hover {
+        background: #8a2a22;
+      }
+      .thumb {
+        display: grid;
+        gap: 2px;
+        aspect-ratio: 16 / 9;
+      }
+      .thumb div {
+        background: #2c2c2c;
+        border-radius: 2px;
+      }
+      .card:hover .thumb div {
+        background: #3d3d3d;
+      }
+      .thumb div:first-child,
+      .card:hover .thumb div:first-child {
+        background: #4f6f8f;
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-top: 12px;
+        color: #6e6e6e;
+      }
+      .row .spacer {
+        flex: 1;
+      }
+      #layouts button.plain {
+        height: 28px;
+        padding: 0 10px;
+        background: transparent;
+        border: 0;
+        border-radius: 8px;
+        color: #8a8a8a;
+        font: inherit;
+        cursor: pointer;
+      }
+      #layouts button.plain:hover,
+      #layouts button.plain:focus-visible {
+        color: #e0e0e0;
+        background: #262626;
+        outline: 0;
+      }
+      #layouts button.plain:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      #layouts input {
+        height: 28px;
+        padding: 0 8px;
+        background: #0e0e0e;
+        border: 1px solid #262626;
+        border-radius: 8px;
+        outline: 0;
+        color: #eee;
+        font: inherit;
+        user-select: text;
+      }
+      #layouts input:focus {
+        border-color: #4a4a4a;
+      }
+      #ed-name {
+        flex: 1;
+        min-width: 120px;
+      }
+      #ed-cols,
+      #ed-rows {
+        width: 52px;
+      }
+
+      #ed-grid {
+        display: grid;
+        gap: 3px;
+        aspect-ratio: 16 / 9;
+        max-height: 34vh;
+        margin: 12px auto 0;
+        touch-action: none;
+      }
+      #ed-grid .cell {
+        background: #1d1d1d;
+        border: 1px dashed #333;
+        border-radius: 4px;
+        cursor: crosshair;
+      }
+      #ed-grid .zone {
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #34495e;
+        border-radius: 4px;
+        color: #dfe8f1;
+        font-size: 15px;
+        cursor: pointer;
+      }
+      #ed-grid .zone.main {
+        background: #4f6f8f;
+      }
+      /* Clicking removes the zone; hint at it without looking like an error. */
+      #ed-grid .zone:hover {
+        outline: 2px solid #c9705f;
+        outline-offset: -2px;
+      }
+      #ed-grid .preview {
+        z-index: 2;
+        background: rgba(120, 160, 200, 0.35);
+        border: 1px solid #7ea6cc;
+        border-radius: 4px;
+        pointer-events: none;
+      }
+      #ed-grid .preview.bad {
+        background: rgba(200, 90, 70, 0.3);
+        border-color: #c9705f;
+      }
+      .hint {
+        margin: 8px 0 0;
+        color: #5a5a5a;
+        text-align: center;
+      }
     </style>
   </head>
   <body>
@@ -200,7 +400,39 @@
       <div id="actions">
         <button id="fullscreen" type="button">Fullscreen</button>
         <button id="new-window" type="button">New window</button>
+        <button id="layouts-toggle" type="button">Layouts</button>
+        <button id="lock" type="button">Lock layout</button>
         <button id="close" type="button">Close window</button>
+      </div>
+      <div id="layouts" hidden>
+        <div id="layout-browser">
+          <div id="layout-list"></div>
+          <div class="row">
+            <span class="spacer"></span>
+            <button id="layout-new" class="plain" type="button">New layout</button>
+            <button id="layout-reset" class="plain" type="button">Restore defaults</button>
+          </div>
+        </div>
+        <div id="editor" hidden>
+          <div class="row" style="margin-top: 0">
+            <input id="ed-name" type="text" placeholder="Name" maxlength="40" spellcheck="false" />
+            <span>Columns</span>
+            <input id="ed-cols" type="number" min="1" max="8" />
+            <span>Rows</span>
+            <input id="ed-rows" type="number" min="1" max="8" />
+          </div>
+          <div id="ed-grid"></div>
+          <p class="hint">
+            Drag across cells to add a zone, click a zone to remove it.
+            Zone 1 gets the window you apply the layout from.
+          </p>
+          <div class="row">
+            <span id="ed-msg"></span>
+            <span class="spacer"></span>
+            <button id="ed-cancel" class="plain" type="button">Cancel</button>
+            <button id="ed-save" class="plain" type="button">Save</button>
+          </div>
+        </div>
       </div>
       <div id="msg" role="alert"></div>
     </div>
