@@ -9,7 +9,7 @@ function isEditable(target) {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
 }
 
-const KEY_ACTIONS = { f: 'fullscreen', r: 'reload', c: 'fit', b: 'browse', a: 'adblock' };
+const KEY_ACTIONS = { f: 'fullscreen', r: 'reload', c: 'fit', l: 'loop', b: 'browse', a: 'adblock' };
 
 // Playback keys, sent to the main process, which applies them to the main
 // video in whichever frame it lives.

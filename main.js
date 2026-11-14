@@ -100,7 +100,7 @@ function frameScript(opts) {
   const root = document.documentElement;
   if (!root) return;
   if (window.__hv) {
-    window.__hv.set(opts.fit, opts.mode);
+    window.__hv.set(opts.fit, opts.mode, opts.loop);
     return;
   }
 
@@ -116,6 +116,7 @@ function frameScript(opts) {
     return r.width * r.height;
   };
   const inMediaMode = () => root.getAttribute('data-hv-mode') === 'media';
+  let loop = Boolean(opts.loop);
 
   // insertCSS only reaches the top document; frames get the same rules through
   // a constructed stylesheet, which a page's CSP cannot block.
@@ -147,7 +148,39 @@ function frameScript(opts) {
       main.controls = true;
       main.setAttribute('data-hv-controls', '');
     }
+    syncLoop();
   };
+
+  // Loop: the main video starts over when it ends. data-hv-loop marks the
+  // videos the viewer switched looping on, so turning it off never touches a
+  // video the page itself set to loop.
+  const syncLoop = () => {
+    const on = loop && inMediaMode();
+    for (const video of document.querySelectorAll('video[data-hv-loop]')) {
+      if (!on || !video.hasAttribute('data-hv-main')) {
+        video.loop = false;
+        video.removeAttribute('data-hv-loop');
+      }
+    }
+    const main = document.querySelector('video[data-hv-main]');
+    if (on && main && !main.loop) {
+      main.loop = true;
+      main.setAttribute('data-hv-loop', '');
+    }
+  };
+  // Streaming players often ignore the loop property and end anyway, or turn
+  // it back off; restart those by hand. Media events do not bubble, so listen
+  // in the capture phase.
+  document.addEventListener(
+    'ended',
+    (event) => {
+      const video = event.target;
+      if (!loop || !inMediaMode() || !video.matches || !video.matches('video[data-hv-main]')) return;
+      video.currentTime = 0;
+      video.play().catch(() => {});
+    },
+    true
+  );
 
   // Tells the parent document that this frame holds media worth stretching.
   const report = () => {
@@ -223,13 +256,14 @@ function frameScript(opts) {
   });
 
   window.__hv = {
-    set(fit, mode) {
+    set(fit, mode, loopOn) {
       root.setAttribute('data-hv-fit', fit);
       root.setAttribute('data-hv-mode', mode);
+      loop = Boolean(loopOn);
       pick();
     },
   };
-  window.__hv.set(opts.fit, opts.mode);
+  window.__hv.set(opts.fit, opts.mode, opts.loop);
 
   // Frames that loaded before this document was ready get asked again.
   for (const frame of document.querySelectorAll('iframe')) {
@@ -303,7 +337,12 @@ function runInFrames(v, code, userGesture = false) {
 }
 
 function frameCode(v) {
-  const opts = { fit: v.fit, mode: v.mediaMode ? 'media' : 'browse', css: INJECTED_CSS };
+  const opts = {
+    fit: v.fit,
+    mode: v.mediaMode ? 'media' : 'browse',
+    loop: settings.loop,
+    css: INJECTED_CSS,
+  };
   return `(${frameScript.toString()})(${JSON.stringify(opts)})`;
 }
 
@@ -317,11 +356,12 @@ function injectAll(v, contents, newDocument) {
   for (const frame of framesOf(contents)) injectFrame(v, frame);
 }
 
-// Pushes the current fit / mode to every frame that already runs the script.
+// Pushes the current fit / mode / loop to every frame that already runs the script.
 function syncFrames(v) {
   const fit = JSON.stringify(v.fit);
   const mode = JSON.stringify(v.mediaMode ? 'media' : 'browse');
-  runInFrames(v, `window.__hv && window.__hv.set(${fit}, ${mode})`);
+  const loop = JSON.stringify(Boolean(settings.loop));
+  runInFrames(v, `window.__hv && window.__hv.set(${fit}, ${mode}, ${loop})`);
 }
 
 // ---------------------------------------------------------------------------
@@ -332,7 +372,7 @@ function syncFrames(v) {
 // CDN down), the viewer simply runs without blocking.
 const PARTITION = 'persist:viewer';
 let blocker = null; // ElectronBlocker once the filter lists are loaded
-let settings = { adblock: true, layouts: null };
+let settings = { adblock: true, loop: false, layouts: null };
 
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 
@@ -423,6 +463,17 @@ function swipe(v, navigate) {
   if (now - (v.lastSwipe || 0) < SWIPE_COOLDOWN_MS) return;
   v.lastSwipe = now;
   navigate(v);
+}
+
+// Loop is one setting for all windows and is remembered across restarts.
+function toggleLoop(origin) {
+  settings.loop = !settings.loop;
+  saveSettings();
+  for (const v of viewers) {
+    syncFrames(v);
+    sendCommand(v, 'loop', settings.loop);
+  }
+  sendCommand(origin, 'toast', settings.loop ? 'Loop on' : 'Loop off');
 }
 
 function toggleFit(v) {
@@ -733,6 +784,7 @@ const ACTIONS = {
   'swipe-back': (v) => swipe(v, goBack),
   'swipe-forward': (v) => swipe(v, goForward),
   fit: toggleFit,
+  loop: toggleLoop,
   browse: toggleMediaMode,
   adblock: toggleAdblock,
   'new-window': openNewWindow,
@@ -860,6 +912,7 @@ function createWindow(bounds = {}) {
   // A window locked before its UI finished loading missed the command.
   host.on('did-finish-load', () => {
     if (v.locked) sendCommand(v, 'locked', true);
+    sendCommand(v, 'loop', Boolean(settings.loop));
     if (v.pendingUrl) sendCommand(v, 'open', v.pendingUrl);
     v.pendingUrl = null;
   });
@@ -906,6 +959,7 @@ const GUEST_ACTIONS = new Set([
   'swipe-back',
   'swipe-forward',
   'fit',
+  'loop',
   'browse',
   'adblock',
 ]);

@@ -33,7 +33,7 @@ After launch, type a URL and press `Enter` (a missing `https://` is added for yo
 
 | Shortcut | Action |
 | --- | --- |
-| `Esc` or `Ctrl+L` | show/hide the menu with the URL field and the fullscreen, new-window and close-window buttons |
+| `Esc` or `Ctrl+L` | show/hide the menu with the URL field and the fullscreen, loop, new-window and close-window buttons |
 | `F`, `F11` or double-click | fullscreen |
 | `C` | fit / fill (`object-fit: contain` / `cover`) |
 | `B` or `Ctrl+B` | browse mode / media mode |
@@ -42,6 +42,7 @@ After launch, type a URL and press `Enter` (a missing `https://` is added for yo
 | `←` / `→` | seek 5 s back / forward |
 | `↑` / `↓` | volume up / down |
 | `M` | mute / unmute |
+| `L` | loop on / off: the video starts over when it ends (all windows, remembered) |
 | `R` or `Ctrl+R` | reload |
 | `Ctrl+N` | open another viewer window |
 | `Ctrl+Alt+1` … `Ctrl+Alt+9` | arrange all windows into layout 1–9 (see [Layouts](#layouts)) |
@@ -81,6 +82,8 @@ You do not need a direct link to the video file. Many sites stream through `blob
 4. Otherwise leaves the page as it is.
 
 The stretched video covers the site's own player buttons, so the viewer turns on the browser's native video controls and adds the playback shortcuts above. Both are undone in browse mode.
+
+**Loop** (`L`, or the button in the menu) makes the main video start over when it ends. It is one setting for all windows and is remembered after a restart. It applies only in media mode, and turning it off leaves videos the page itself set to loop alone.
 
 ## Ad blocking
 

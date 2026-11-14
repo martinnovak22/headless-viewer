@@ -92,6 +92,9 @@ document.getElementById('close').addEventListener('click', () => {
   window.viewer.action('close');
 });
 
+const loopButton = document.getElementById('loop');
+loopButton.addEventListener('click', () => window.viewer.action('loop'));
+
 const lockButton = document.getElementById('lock');
 lockButton.addEventListener('click', () => window.viewer.action('lock'));
 
@@ -371,7 +374,7 @@ view.addEventListener('did-fail-load', (event) => {
 
 // --- Shortcuts and double-click while the UI window has focus --------------
 
-const KEY_ACTIONS = { f: 'fullscreen', r: 'reload', c: 'fit', b: 'browse', a: 'adblock' };
+const KEY_ACTIONS = { f: 'fullscreen', r: 'reload', c: 'fit', l: 'loop', b: 'browse', a: 'adblock' };
 
 document.addEventListener('keydown', (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
@@ -395,6 +398,7 @@ window.viewer.onCommand((name, data) => {
   if (name === 'toggle-bar') toggleBar();
   else if (name === 'toast') showToast(data);
   else if (name === 'open') openUrl(data);
+  else if (name === 'loop') loopButton.textContent = data ? 'Loop: on' : 'Loop: off';
   else if (name === 'fullscreen') document.body.classList.toggle('fullscreen', Boolean(data));
   else if (name === 'locked') {
     document.body.classList.toggle('locked', Boolean(data));
