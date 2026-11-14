@@ -92,7 +92,7 @@ Press `A` to turn blocking off for sites that refuse to play with a blocker; the
 
 Cookies and logins are stored persistently, so you stay signed in after restarting the app. All viewer windows share the same login.
 
-In media mode the app modifies the page (hides scrollbars, stretches the main video or image), which breaks login forms and normal browsing. So:
+In media mode the app modifies pages that have a main video or image (stretches it and turns off scrolling; pages without one scroll normally), which can break login forms and normal browsing. So:
 
 1. Press `B` – the page is shown as it normally would be.
 2. Sign in and find the image or video.

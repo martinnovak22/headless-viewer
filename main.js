@@ -47,10 +47,11 @@ app.userAgentFallback = app.userAgentFallback
 // Every rule is scoped to media mode, so browse mode only has to flip the
 // data-hv-mode attribute. data-hv-root marks the documents whose own <html> and
 // <body> get reset: always the top page, and an embedded frame only while it
-// holds the main media.
+// holds the main media. The page is locked (no scrolling, no margins) only
+// when it actually has main media; any other page keeps scrolling normally.
 const INJECTED_CSS = `
-  html[data-hv-mode="media"][data-hv-root],
-  html[data-hv-mode="media"][data-hv-root] > body {
+  html[data-hv-mode="media"][data-hv-root]:has([data-hv-main]),
+  html[data-hv-mode="media"][data-hv-root]:has([data-hv-main]) > body {
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
@@ -58,8 +59,8 @@ const INJECTED_CSS = `
     width: 100vw !important;
     height: 100vh !important;
   }
-  html[data-hv-mode="media"][data-hv-root]::-webkit-scrollbar,
-  html[data-hv-mode="media"][data-hv-root] ::-webkit-scrollbar {
+  html[data-hv-mode="media"][data-hv-root]:has([data-hv-main])::-webkit-scrollbar,
+  html[data-hv-mode="media"][data-hv-root]:has([data-hv-main]) ::-webkit-scrollbar {
     display: none !important;
   }
   html[data-hv-mode="media"] [data-hv-main] {
