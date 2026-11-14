@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('viewer', {
   saveLayouts: (list) => ipcRenderer.invoke('viewer:layouts-save', list),
   // The main process needs to know whether the URL bar is visible.
   setBarVisible: (visible) => ipcRenderer.send('viewer:bar-visible', visible),
-  // Commands from the main process: 'toggle-bar' | 'toast' | 'fullscreen' | 'locked'.
+  // Commands from the main process: 'toggle-bar' | 'toast' | 'open' | 'fullscreen' | 'locked'.
   onCommand: (callback) => {
     ipcRenderer.on('viewer:command', (_event, name, data) => callback(name, data));
   },

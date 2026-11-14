@@ -394,6 +394,7 @@ document.addEventListener('dblclick', (event) => {
 window.viewer.onCommand((name, data) => {
   if (name === 'toggle-bar') toggleBar();
   else if (name === 'toast') showToast(data);
+  else if (name === 'open') openUrl(data);
   else if (name === 'fullscreen') document.body.classList.toggle('fullscreen', Boolean(data));
   else if (name === 'locked') {
     document.body.classList.toggle('locked', Boolean(data));

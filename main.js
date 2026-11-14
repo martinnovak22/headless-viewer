@@ -8,6 +8,7 @@ const {
   ipcMain,
   screen,
   session,
+  shell,
   webFrameMain,
 } = require('electron');
 const fs = require('node:fs');
@@ -412,6 +413,17 @@ function goForward(v) {
   }
 }
 
+// The momentum of a trackpad swipe keeps sending wheel events after the
+// navigation, into the newly loaded page, whose preload starts counting anew.
+// One swipe must not go back twice, so swipes are ignored for a moment.
+const SWIPE_COOLDOWN_MS = 1000;
+function swipe(v, navigate) {
+  const now = Date.now();
+  if (now - (v.lastSwipe || 0) < SWIPE_COOLDOWN_MS) return;
+  v.lastSwipe = now;
+  navigate(v);
+}
+
 function toggleFit(v) {
   v.fit = v.fit === 'contain' ? 'cover' : 'contain';
   syncFrames(v);
@@ -502,10 +514,75 @@ function toggleStash() {
 }
 
 // Opens another viewer window, slightly offset from the one it was opened from.
-function openNewWindow(v) {
+// url (optional) is loaded into the new window as soon as its UI is ready.
+function openNewWindow(v, url) {
   const [x, y] = v.win.getPosition();
   const [width, height] = v.win.isFullScreen() ? [1280, 720] : v.win.getSize();
-  createWindow({ x: x + 32, y: y + 32, width, height });
+  const created = createWindow({ x: x + 32, y: y + 32, width, height });
+  if (typeof url === 'string') created.pendingUrl = url;
+}
+
+// ---- Context menu on the loaded page --------------------------------------
+//
+// Three sections: Open (in a new viewer window or the default browser), Copy
+// (every address under the cursor) and Inspect. Only items that
+// apply to what was right-clicked are shown.
+
+const isWebUrl = (url) => /^https?:/i.test(url || '');
+// A new viewer window can also show an inline image; blob: URLs only live in
+// the page that created them, so they are never offered.
+const isViewerUrl = (url) => isWebUrl(url) || /^data:image\//i.test(url || '');
+
+function showContextMenu(v, contents, params) {
+  const media = { image: 'image', video: 'video', audio: 'audio' }[params.mediaType];
+  // The things under the cursor, most specific first. The frame is offered
+  // only for embedded frames, e.g. a player on someone else's page.
+  const targets = [];
+  if (params.linkURL) targets.push({ name: 'link', url: params.linkURL });
+  if (media && params.srcURL) targets.push({ name: media, url: params.srcURL });
+  if (params.frameURL && params.frameURL !== params.pageURL) {
+    targets.push({ name: 'frame', url: params.frameURL });
+  }
+  targets.push({ name: 'page', url: params.pageURL });
+
+  const open = [];
+  for (const t of targets) {
+    if (isViewerUrl(t.url)) {
+      open.push({ label: `Open ${t.name} in new window`, click: () => openNewWindow(v, t.url) });
+    }
+    if (isWebUrl(t.url)) {
+      open.push({ label: `Open ${t.name} in browser`, click: () => shell.openExternal(t.url) });
+    }
+  }
+
+  const copy = [];
+  if (params.isEditable) {
+    const f = params.editFlags;
+    copy.push(
+      { label: 'Cut', role: 'cut', enabled: f.canCut },
+      { label: 'Copy', role: 'copy', enabled: f.canCopy },
+      { label: 'Paste', role: 'paste', enabled: f.canPaste },
+      { label: 'Select all', role: 'selectAll', enabled: f.canSelectAll }
+    );
+  } else if (params.selectionText) {
+    copy.push({ label: 'Copy text', click: () => clipboard.writeText(params.selectionText) });
+  }
+  if (params.linkText && params.linkText !== params.linkURL && !params.selectionText) {
+    copy.push({ label: 'Copy link text', click: () => clipboard.writeText(params.linkText) });
+  }
+  for (const t of targets) {
+    if (/^blob:/i.test(t.url) || !t.url) continue;
+    copy.push({ label: `Copy ${t.name} address`, click: () => clipboard.writeText(t.url) });
+  }
+
+  const inspect = [
+    { label: 'Inspect element', click: () => contents.inspectElement(params.x, params.y) },
+  ];
+
+  const template = [open, copy, inspect]
+    .filter((section) => section.length)
+    .flatMap((section, i) => (i ? [{ type: 'separator' }, ...section] : section));
+  Menu.buildFromTemplate(template).popup({ window: v.win });
 }
 
 
@@ -650,6 +727,10 @@ function toggleLock(origin) {
 const ACTIONS = {
   fullscreen: toggleFullscreen,
   reload,
+  back: goBack,
+  forward: goForward,
+  'swipe-back': (v) => swipe(v, goBack),
+  'swipe-forward': (v) => swipe(v, goForward),
   fit: toggleFit,
   browse: toggleMediaMode,
   adblock: toggleAdblock,
@@ -691,6 +772,10 @@ function handleInput(v, contents, event, input) {
   else if (mod && input.shift && !input.alt && key === 'h') handler = toggleStash;
   else if (input.alt && key === 'arrowleft' && !editingUrl) handler = () => goBack(v);
   else if (input.alt && key === 'arrowright' && !editingUrl) handler = () => goForward(v);
+  // Cmd+[ and Cmd+] as in Safari and Chrome on macOS; mouse utilities such as
+  // Logi Options often map the side buttons to exactly these.
+  else if (isMac && input.meta && !input.alt && input.code === 'BracketLeft') handler = () => goBack(v);
+  else if (isMac && input.meta && !input.alt && input.code === 'BracketRight') handler = () => goForward(v);
 
   if (handler) {
     event.preventDefault();
@@ -713,6 +798,7 @@ function setupGuest(v, contents) {
     if (!isMainFrame) injectFrame(v, webFrameMain.fromId(processId, routingId));
   });
   contents.on('before-input-event', (event, input) => handleInput(v, contents, event, input));
+  contents.on('context-menu', (_event, params) => showContextMenu(v, contents, params));
   contents.on('enter-html-full-screen', () => (v.guestHtmlFullscreen = true));
   contents.on('leave-html-full-screen', () => (v.guestHtmlFullscreen = false));
 
@@ -756,6 +842,7 @@ function createWindow(bounds = {}) {
     urlBarVisible: true,
     zone: null, // index of the zone in the last applied layout
     locked: false, // cannot be moved or resized by the user
+    pendingUrl: null, // URL to load once the UI is ready (Open in new window)
   };
   viewers.add(v);
 
@@ -772,6 +859,8 @@ function createWindow(bounds = {}) {
   // A window locked before its UI finished loading missed the command.
   host.on('did-finish-load', () => {
     if (v.locked) sendCommand(v, 'locked', true);
+    if (v.pendingUrl) sendCommand(v, 'open', v.pendingUrl);
+    v.pendingUrl = null;
   });
   host.on('before-input-event', (event, input) => handleInput(v, host, event, input));
 
@@ -808,7 +897,17 @@ function hostViewerOf(event) {
 }
 
 // Actions a loaded page may trigger; the rest are reserved for the UI window.
-const GUEST_ACTIONS = new Set(['fullscreen', 'reload', 'fit', 'browse', 'adblock']);
+const GUEST_ACTIONS = new Set([
+  'fullscreen',
+  'reload',
+  'back',
+  'forward',
+  'swipe-back',
+  'swipe-forward',
+  'fit',
+  'browse',
+  'adblock',
+]);
 
 ipcMain.on('viewer:action', (event, name) => {
   const v = viewerOf(event.sender);

@@ -47,11 +47,21 @@ After launch, type a URL and press `Enter` (a missing `https://` is added for yo
 | `Ctrl+Alt+1` … `Ctrl+Alt+9` | arrange all windows into layout 1–9 (see [Layouts](#layouts)) |
 | `Ctrl+Alt+L` | lock / unlock the layout |
 | `Ctrl+Shift+H` | pause everything and minimize all windows; press again to restore and resume |
-| `Alt+←` / `Alt+→` | back / forward in history |
+| `Alt+←` / `Alt+→`, mouse side buttons, two-finger swipe | back / forward in history (on macOS also `Cmd+[` / `Cmd+]`) |
 | `Ctrl+Q` | quit the app (all windows) |
 | `Alt+F4` | close the current window |
 
 On macOS, `Cmd` works in place of `Ctrl`. `Ctrl+Shift+H` is a global shortcut: it works even when the viewer is in the background, and while the viewer is running it takes that combination away from other apps. Restoring any one window from the Dock or taskbar brings back all of them and resumes playback. Single-letter shortcuts do not fire while you are typing in a text field on the page. The playback keys are taken over only in media mode and only when the viewer has found a video; otherwise the page keeps its own keyboard behaviour.
+
+## Context menu
+
+Right-clicking the loaded page opens a menu in three sections, showing only what applies to the spot you clicked:
+
+- **Open** – the link, image, video, embedded frame (e.g. a player on someone else's page) or the page itself, in a new viewer window or in your default browser. Opening an image in a new window shows it on its own, without the page around it.
+- **Copy** – selected text, link text, and the address of each of the above. In a text field it offers Cut, Copy, Paste and Select all instead.
+- **Inspect element** – opens the developer tools on the clicked element, for anything the menu cannot see, such as images set as a CSS background or hidden under an overlay.
+
+Videos streamed through a `blob:` address cannot be opened or copied by address; use the frame or page instead.
 
 ## Layouts
 
